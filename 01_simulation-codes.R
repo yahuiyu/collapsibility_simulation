@@ -11,7 +11,7 @@
 ################################################################################
 
 #===============================================================================
-# iteration=1
+iteration=1
 # simulate data from linear/logistic models
 simulation_function <- function(iteration, add_interaction = TRUE){
   
@@ -143,137 +143,11 @@ simulation_function <- function(iteration, add_interaction = TRUE){
   sim_res_gcomp$method <- "gcomp"
   
 #------------------------------------------------------------------------------- 
-#### ipw
-  analytic_function_ipw <- function(outcome, linkfunction){
-  
-  data$pscore <- glm(A ~ W, data = data, 
-                     family = binomial(link = "logit"))$fitted.values
-  
-  #marginal probability of A 
-  pa<- mean(data$A)
-  data$sw <- (pa/data$pscore)*data$A +
-    (mean(1 - data$A)/(1 - data$pscore))*(1 - data$A)
-  
-  data$sw_att <- ifelse(data$A == 1, 1, 
-                        pa / (1 - pa) * (1 - data$pscore) / data$pscore)
-  
-  ATE_hat <- summary(
-    glm(outcome ~ A,
-        data = data,
-        weights = sw,
-        family = binomial(link = linkfunction )))$coefficients[2,1]
-
-  ATT_hat <- summary(
-   glm(outcome ~ A,
-      data = data,
-      weights = sw_att,
-      family = binomial(link = linkfunction)))$coefficients[2,1]
-  
-  estimate <- ATE_hat - ATT_hat
-  
-  results <- c(ATE_hat, ATT_hat, estimate) 
-  return(results)
-  
-  }
- 
-  #.............................................................................  
-  #### Different scenarios for fitting models
-  ## QUESTIONS: cannot have both RD and OR for each scenario; can we include A*W?
-  ## (these estimates were set to 9999 as n/a)
-  
-  # case 1, linear DGM, single linear regression, no interactions
-  r1<-analytic_function_ipw(outcome=linear_Y, linkfunction="identity")
-  s1<-data.frame(ATE_hat = r1[[1]],
-                 ATT_hat = r1[[2]],
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = r1[[3]],
-                 comparisonOR = 9999,
-                 scenario=1,
-                 method="ipw")
-
-  # case 2, linear DGM, single linear regression, interactions (X)
-  s2<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = 9999,
-                 comparisonOR = 9999,        
-                 scenario=2,
-                 method="ipw")
-
-  # case 3, logit DGM, single linear regression, no interactions
-  r3<-analytic_function_ipw(outcome=logit_Y, linkfunction="identity")
-  s3<-data.frame(ATE_hat = r3[[1]],
-                 ATT_hat = r3[[2]],
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = r1[[3]],
-                 comparisonOR = 9999,
-                 scenario=3,
-                 method="ipw")
-  
-  # case 4, logit DGM, single linear regression, interactions (X)
-  s4<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = 9999,
-                 comparisonOR = 9999,        
-                 scenario=4,
-                 method="ipw")
-  
-  # case 5, linear DGM, single logit regression, no interactions
-  r5<-analytic_function_ipw(outcome=linear_Y, linkfunction="logit")
-  s5<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = r5[[1]],
-                 ATT_logOR_hat = r5[[2]],
-                 comparisonRD = 9999,
-                 comparisonOR = r5[[3]],
-                 scenario=5,
-                 method="ipw")
-  
-  # case 6, linear DGM, single logit regression, interactions (X)
-  s6<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = 9999,
-                 comparisonOR = 9999,        
-                 scenario=6,
-                 method="ipw")
-  
-  # case 7, logit DGM, single logit regression, no interactions
-  r7<-analytic_function_ipw(outcome=logit_Y, linkfunction="logit")
-  s7<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = r7[[1]],
-                 ATT_logOR_hat = r7[[2]],
-                 comparisonRD = 9999,
-                 comparisonOR = r7[[3]],
-                 scenario=7,
-                 method="ipw")
-  
-  # case 8, logit DGM, single logit regression, interactions (X)
-  s8<-data.frame(ATE_hat = 9999,
-                 ATT_hat = 9999,
-                 ATE_logOR_hat = 9999,
-                 ATT_logOR_hat = 9999,
-                 comparisonRD = 9999,
-                 comparisonOR = 9999,        
-                 scenario=8,
-                 method="ipw")
-  #.............................................................................
-  #### obtain final results from gcomp (sim_res_ipw)
-  sim_res_ipw <- rbind(s1, s2, s3, s4, s5, s6, s7, s8)
-
-#------------------------------------------------------------------------------- 
 ### AIPW and TMLE (these two methods use same set of predicted values 
 ### from same set of SL)
   
   analytic_function_aipwtmle <- function(outcome, sl.lib){
-
+  
   Y <- outcome
   A <- data$A
   covariates_ps <- data %>% select (W)
@@ -291,7 +165,25 @@ simulation_function <- function(iteration, add_interaction = TRUE){
   fold_dat <- tibble(id = 1:n, folds)
   fold_index <- split(fold_dat$id, fold_dat$folds)
   
-  #create a wrap for "SL.lm.interaction" (todo)
+  #create a wrap for "SL.lm.interaction
+  SL.lm.interaction <- 
+    function (Y, X, newX, family, obsWeights, model = TRUE, ...)  {
+    if (is.matrix(X)) {
+      X = as.data.frame(X)
+    }
+    fit <- stats::lm(Y ~ .^2, data = X, weights = obsWeights, model = model)
+    if (is.matrix(newX)) {
+      newX = as.data.frame(newX)
+    }
+    pred <- predict(fit, newdata = newX, type = "response")
+    if (family$family == "binomial") {
+      pred = pmin(pmax(pred, 0), 1)
+    }
+    fit <- list(object = fit, family = family)
+    class(fit) <- "SL.lm"
+    out <- list(pred = pred, fit = fit)
+    return(out)
+  }
   
   fit_mu <- CV.SuperLearner(Y = Y,
                             X = covariates_mu, 
@@ -308,7 +200,7 @@ simulation_function <- function(iteration, add_interaction = TRUE){
                             X = covariates_ps,
                             method = "method.NNLS", 
                             family = binomial(),
-                            SL.library = sl.lib,
+                            SL.library = "SL.glm",
                             cvControl = list(V = num.folds, 
                                              validRows = fold_index),
                             control = list(saveCVFitLibrary = F),
@@ -342,8 +234,8 @@ simulation_function <- function(iteration, add_interaction = TRUE){
                              onlySL=T)$pred)
   }
   
-  mu_hat1 <- bound_func(mu_hat1, .0125, .975)
-  mu_hat0 <- bound_func(mu_hat0, .0125, .975)
+  # mu_hat1 <- bound_func(mu_hat1, .0125, .975)
+  # mu_hat0 <- bound_func(mu_hat0, .0125, .975)
   
   #............................................................................. 
   #### AIPW 
@@ -391,13 +283,26 @@ simulation_function <- function(iteration, add_interaction = TRUE){
   
   # contrasts 2
   ATE_logOR_hat <- tmle_est$estimates$OR$log.psi
+  
+  # Extract TMLE estimates to calculate ATT_logOR_hat
+  Q1 <- tmle_est$Qstar[,2]  
+  Q0 <- tmle_est$Qstar[,1]  
+  dat_attor <- data.frame(cbind(A, Q1, Q0))
+  
+  odds1_ATT <-mean(dat_attor$Q1[dat_attor$A==1]) /
+              (1-mean(dat_attor$Q1[dat_attor$A==1]))
+  
+  odds0_ATT <-mean(dat_attor$Q0[dat_attor$A==0]) /
+              (1-mean(dat_attor$Q0[dat_attor$A==0]))
+  
+  ATT_logOR_hat <- log(odds1_ATT/odds0_ATT)
    
   res_tmle <- data.frame(ATE_hat = ATE_hat,
                          ATT_hat = ATT_hat,
                          ATE_logOR_hat = ATE_logOR_hat,
-                         ATT_logOR_hat = 9999,
+                         ATT_logOR_hat = ATT_logOR_hat,
                          comparisonRD = ATE_hat - ATT_hat,
-                         comparisonOR = 9999,
+                         comparisonOR = ATE_logOR_hat - ATT_logOR_hat,
                          method = "TMLE") 
 
   res_both <-rbind(res_aipw, res_tmle)
@@ -415,28 +320,16 @@ simulation_function <- function(iteration, add_interaction = TRUE){
                                  sl.lib=c("SL.lm"))[[1]]
   
   # case 2, linear DGM, single linear regression, interactions 
-  # (X- need sl.lm.interaction)
-  s2<-data.frame(ATE_hat = c(9999,9999),
-                 ATT_hat = c(9999,9999),
-                 ATE_logOR_hat = c(9999,9999),
-                 ATT_logOR_hat = c(9999,9999),
-                 comparisonRD = c(9999,9999),
-                 comparisonOR = c(9999,9999),        
-                 method= c("aipw","tmle"))
+  s2<-analytic_function_aipwtmle(outcome=data$linear_Y, 
+                                      sl.lib=c("SL.lm","SL.lm.interaction"))[[1]]
   
   # case 3, logit DGM, single linear regression, no interactions
   s3<-analytic_function_aipwtmle(outcome=data$logit_Y, 
                                  sl.lib=c("SL.lm"))[[1]]
   
   # case 4, logit DGM, single linear regression, interactions 
-  # (X- need sl.lm.interaction)
-  s4<-data.frame(ATE_hat = c(9999,9999),
-                 ATT_hat = c(9999,9999),
-                 ATE_logOR_hat = c(9999,9999),
-                 ATT_logOR_hat = c(9999,9999),
-                 comparisonRD = c(9999,9999),
-                 comparisonOR = c(9999,9999),        
-                 method= c("aipw","tmle"))
+  s4<-analytic_function_aipwtmle(outcome=data$logit_Y, 
+                                 sl.lib=c("SL.lm","SL.lm.interaction"))[[1]]
   
   # case 5, linear DGM, single logit regression, no interactions
   s5<-analytic_function_aipwtmle(outcome=data$linear_Y, 
@@ -474,20 +367,20 @@ simulation_function <- function(iteration, add_interaction = TRUE){
   
   # case 11, linear DGM, sl.lib with all algorithms (need to save coef of sl)
   s11<-analytic_function_aipwtmle(outcome=data$linear_Y, 
-                                 sl.lib=c("SL.lm",
+                                 sl.lib=c("SL.lm", "SL.lm.interaction",
                                           "SL.glm","SL.glm.interaction"))[[1]]
   
   s11_c<-analytic_function_aipwtmle(outcome=data$linear_Y, 
-                                 sl.lib=c("SL.lm",
+                                 sl.lib=c("SL.lm", "SL.lm.interaction",
                                           "SL.glm","SL.glm.interaction"))[[2]]
   
   # case 12, logit DGM, sl.lib with all algorithms (need to save coef of sl)
   s12<-analytic_function_aipwtmle(outcome=data$logit_Y, 
-                                 sl.lib=c("SL.lm",
+                                 sl.lib=c("SL.lm", "SL.lm.interaction",
                                           "SL.glm","SL.glm.interaction"))[[1]]
   
   s12_c<-analytic_function_aipwtmle(outcome=data$logit_Y, 
-                                  sl.lib=c("SL.lm",
+                                  sl.lib=c("SL.lm", "SL.lm.interaction",
                                            "SL.glm","SL.glm.interaction"))[[2]]
 
   #.............................................................................
@@ -498,15 +391,15 @@ simulation_function <- function(iteration, add_interaction = TRUE){
   
   coef_SL2_mu<- data.frame(rbind(s9_c, s10_c))
   coef_SL2_mu$scenario <- rep(c(9, 10), each = 10)
-  coef_SL3_mu<- data.frame(rbind(s11_c, s12_c))
-  coef_SL3_mu$scenario <- rep(c(11, 12), each = 10)
+  coef_SL4_mu<- data.frame(rbind(s11_c, s12_c))
+  coef_SL4_mu$scenario <- rep(c(11, 12), each = 10)
 #-------------------------------------------------------------------------------
 #### obtain final results for this function
   
-  table<-cbind(iteration, rbind(sim_res_gcomp, sim_res_ipw, sim_res_dr))
+  table<-cbind(iteration, rbind(sim_res_gcomp, sim_res_dr))
   coef2_table <-cbind(iteration, coef_SL2_mu)
-  coef3_table <-cbind(iteration, coef_SL3_mu)
-  final_results_list<-list (table, coef2_table,coef3_table)
+  coef4_table <-cbind(iteration, coef_SL4_mu)
+  final_results_list<-list (table, coef2_table,coef4_table)
   
   return(final_results_list)
 }
@@ -517,20 +410,21 @@ simulation_function <- function(iteration, add_interaction = TRUE){
 ### Run simulation for DGM with interaction
 set.seed(123)
 
-# sim_res <- mclapply(1:4, function(x) simulation_function(iteration = x,
-#                                                          add_interaction = FALSE), 
-#                     mc.cores = 3, 
-#                     mc.preschedule = FALSE, 
-#                     mc.cleanup = TRUE)
+sim_res <- mclapply(1:200, function(x) simulation_function(iteration = x,
+                                                         add_interaction = FALSE), 
+                   mc.cores = 3, 
+                   mc.preschedule = FALSE, 
+                   mc.cleanup = TRUE)
 
-sim_res <- lapply(1:200, function(x) simulation_function(iteration = x, 
-                                                       add_interaction = TRUE))
+# sim_res <- lapply(1:2, function(x) simulation_function(iteration = x, 
+#                                                        add_interaction = TRUE))
+
 res_inter <- do.call(rbind, lapply(sim_res, `[[`, 1))
 coef2_inter<- do.call(rbind, lapply(sim_res, `[[`, 2))
-coef3_inter<- do.call(rbind, lapply(sim_res, `[[`, 3))
+coef4_inter<- do.call(rbind, lapply(sim_res, `[[`, 3))
 
 write_csv(coef2_inter, here("output", "coef2_inter.csv"))
-write_csv(coef3_inter, here("output", "coef3_inter.csv"))
+write_csv(coef4_inter, here("output", "coef4_inter.csv"))
 
 #...............................................................................
 # Results for RD,OR comparison
@@ -543,8 +437,6 @@ results <- res_inter %>%
             ATT_rd = mean(ATT_hat),
             ATT_or = mean(ATT_logOR_hat))
 
-#results[ ]<- lapply(results, function(x) if(is.numeric(x)) round(x, 4) else x)
-
 # Define the scenarios 
 scenario_table <- data.frame(
   scenario = 1:12,
@@ -553,7 +445,7 @@ scenario_table <- data.frame(
           "Linear", "Logit","Linear", "Logit"),
   AnalyticModel = c("linear", "Linear", "Linear", "Linear", 
                     "Logit", "Logit", "Logit", "Logit",
-                    "SL2","SL2","SL3","SL3"),
+                    "SL2","SL2","SL4","SL4"),
   InteractionInModel = c("No", "Yes", "No", "Yes", 
                          "No", "Yes", "No", "Yes",
                          "No","No","Yes","Yes")
@@ -563,25 +455,28 @@ results_inter <- scenario_table %>%
             right_join(results, by = "scenario") %>%
             mutate_if(is.numeric, ~ na_if(., 9999))
 
-write_csv(results_inter, here("output", "results_inter.csv"))
+current_date <- Sys.Date()
+filename <- here("output", paste0("results_inter_", current_date, ".csv"))
+write_csv(results_inter, filename)
 
 #-------------------------------------------------------------------------------
 ### Run simulation for DGM without interaction
 set.seed(123)
-# sim_res <- mclapply(1:1, function(x) simulation_function(iteration = x,
-#                                                          add_interaction = FALSE), 
-#                     mc.cores = 3, 
-#                     mc.preschedule = FALSE, 
-#                     mc.cleanup = TRUE)
+sim_res_no <- mclapply(1:200, function(x) 
+  simulation_function(iteration = x, add_interaction = FALSE), 
+  mc.cores = 3, 
+                   mc.preschedule = FALSE, 
+                   mc.cleanup = TRUE)
 
-sim_res_no <- lapply(1:200, function(x) simulation_function(iteration = x, 
-                                                       add_interaction = FALSE))
+# sim_res_no <- lapply(1:2, function(x) simulation_function(iteration = x, 
+#                                                        add_interaction = FALSE))
+
 res_nointer <- do.call(rbind, lapply(sim_res_no, `[[`, 1))
 coef2_nointer<- do.call(rbind, lapply(sim_res_no, `[[`, 2))
-coef3_nointer<- do.call(rbind, lapply(sim_res_no, `[[`, 3))
+coef4_nointer<- do.call(rbind, lapply(sim_res_no, `[[`, 3))
 
 write_csv(coef2_nointer, here("output", "coef2_nointer.csv"))
-write_csv(coef3_nointer, here("output", "coef3_nointer.csv"))
+write_csv(coef4_nointer, here("output", "coef4_nointer.csv"))
 
 #...............................................................................
 # Results for RD,OR comparison
@@ -594,8 +489,6 @@ results <- res_nointer %>%
             ATT_rd = mean(ATT_hat),
             ATT_or = mean(ATT_logOR_hat))
 
-#results[ ]<- lapply(results, function(x) if(is.numeric(x)) round(x, 4) else x)
-
 # Define the scenarios [Confirm with each model]
 scenario_table <- data.frame(
   scenario = 1:12,
@@ -604,7 +497,7 @@ scenario_table <- data.frame(
           "Linear", "Logit","Linear", "Logit"),
   AnalyticModel = c("linear", "Linear", "Linear", "Linear", 
                     "Logit", "Logit", "Logit", "Logit",
-                    "SL2","SL2","SL3","SL3"),
+                    "SL2","SL2","SL4","SL4"),
   InteractionInModel = c("No", "Yes", "No", "Yes", 
                          "No", "Yes", "No", "Yes",
                          "No","No","Yes","Yes")
@@ -614,8 +507,10 @@ results_nointer <- scenario_table %>%
   right_join(results, by = "scenario") %>%
   mutate_if(is.numeric, ~ na_if(., 9999))
 
-write_csv(results_nointer, here("output", "results_nointer.csv"))
 
+current_date <- Sys.Date()
+filename <- here("output", paste0("results_nointer_", current_date, ".csv"))
+write_csv(results_nointer, filename)
 
 #-------------------------------------------------------------------------------
 ## Combine two tables 
@@ -623,5 +518,10 @@ results_inter <- cbind(DGM_interaction = "Yes", results_inter)
 results_nointer <- cbind(DGM_interaction = "No", results_nointer)
 final_table <- rbind(results_inter,results_nointer)
 
-write_csv(final_table, here("output", "results_final.csv"))
+final_table <- final_table %>% 
+  select(scenario, DGM, DGM_interaction, AnalyticModel, InteractionInModel,
+         method, RD_diff, OR_diff, ATE_rd, ATT_rd, ATE_or, ATT_or) 
 
+current_date <- Sys.Date()
+filename <- here("output", paste0("results_final_", current_date, ".csv"))
+write_csv(final_table, filename)
