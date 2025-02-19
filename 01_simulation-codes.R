@@ -409,9 +409,8 @@ simulation_function <- function(iteration, add_interaction = TRUE){
 #===============================================================================
 ### Run simulation for DGM with interaction
 set.seed(123)
-
-sim_res <- mclapply(1:200, function(x) simulation_function(iteration = x,
-                                                         add_interaction = FALSE), 
+sim_res <- mclapply(1:500, function(x) simulation_function(iteration = x,
+                                                         add_interaction = TRUE), 
                    mc.cores = 3, 
                    mc.preschedule = FALSE, 
                    mc.cleanup = TRUE)
@@ -423,8 +422,19 @@ res_inter <- do.call(rbind, lapply(sim_res, `[[`, 1))
 coef2_inter<- do.call(rbind, lapply(sim_res, `[[`, 2))
 coef4_inter<- do.call(rbind, lapply(sim_res, `[[`, 3))
 
+current_date <- Sys.Date()
+filename <- here("output", paste0("res_inter_full", current_date, ".csv"))
+write_csv(res_inter, filename)
+
+current_date <- Sys.Date()
+filename <- here("output", paste0("coef2_inter_", current_date, ".csv"))
+write_csv(coef2_inter, filename)
+
+current_date <- Sys.Date()
+filename <- here("output", paste0("coef4_inter_", current_date, ".csv"))
+write_csv(coef4_inter, filename)
+
 write_csv(coef2_inter, here("output", "coef2_inter.csv"))
-write_csv(coef4_inter, here("output", "coef4_inter.csv"))
 
 #...............................................................................
 # Results for RD,OR comparison
@@ -462,7 +472,7 @@ write_csv(results_inter, filename)
 #-------------------------------------------------------------------------------
 ### Run simulation for DGM without interaction
 set.seed(123)
-sim_res_no <- mclapply(1:200, function(x) 
+sim_res_no <- mclapply(1:500, function(x) 
   simulation_function(iteration = x, add_interaction = FALSE), 
   mc.cores = 3, 
                    mc.preschedule = FALSE, 
@@ -475,8 +485,18 @@ res_nointer <- do.call(rbind, lapply(sim_res_no, `[[`, 1))
 coef2_nointer<- do.call(rbind, lapply(sim_res_no, `[[`, 2))
 coef4_nointer<- do.call(rbind, lapply(sim_res_no, `[[`, 3))
 
-write_csv(coef2_nointer, here("output", "coef2_nointer.csv"))
-write_csv(coef4_nointer, here("output", "coef4_nointer.csv"))
+current_date <- Sys.Date()
+filename <- here("output", paste0("res_nointer_full", current_date, ".csv"))
+write_csv(res_nointer, filename)
+
+current_date <- Sys.Date()
+filename <- here("output", paste0("coef2_nointer_", current_date, ".csv"))
+write_csv(coef2_nointer, filename)
+
+current_date <- Sys.Date()
+filename <- here("output", paste0("coef4_nointer_", current_date, ".csv"))
+write_csv(coef4_nointer, filename)
+
 
 #...............................................................................
 # Results for RD,OR comparison
@@ -525,3 +545,142 @@ final_table <- final_table %>%
 current_date <- Sys.Date()
 filename <- here("output", paste0("results_final_", current_date, ".csv"))
 write_csv(final_table, filename)
+
+#===============================================================================
+### True values 
+set.seed(123)
+n <- 5e7
+W <- runif(n)
+A <- rbinom(n, 1, plogis(W))
+
+logit_Y <- rbinom(n, 1, plogis(A + W + A * W))
+continuous_Y <- A + W + A * W + rnorm(n)
+
+# With interaction
+continous_Y_inter <- A + W +  A*W + rnorm(n)
+threshold_inter <- median(continous_Y_inter)
+
+EY1_logit_inter <- rbinom(n, 1, plogis(1 + W + 1 * W))
+continuous_Y1_inter <- 1 + W + 1 * W + rnorm(n)
+EY1_linear_inter <- as.numeric(continuous_Y1_inter > 
+                                   median(threshold_inter))
+
+EY0_logit_inter <-  logit_Y <- rbinom(n, 1, plogis(0 + W + 0 * W))
+continuous_Y0_inter <- 0 + W + 0 * W + rnorm(n)
+EY0_linear_inter <- as.numeric(continuous_Y0_inter > 
+                                   median(threshold_inter))
+
+# Without interaction
+continous_Y_nointer <- A + W + rnorm(n)
+threshold_nointer <- median(continous_Y_nointer)
+
+EY1_logit_nointer <- rbinom(n, 1, plogis(1 + W))
+continuous_Y1_nointer <- 1 + W + rnorm(n)
+EY1_linear_nointer <- as.numeric(continuous_Y1_nointer >     
+                                     median(threshold_nointer))
+                                   
+EY0_logit_nointer <- rbinom(n, 1, plogis(0 + W))
+continuous_Y0_nointer <- 0 + W + rnorm(n)
+EY0_linear_nointer <- as.numeric(continuous_Y0_nointer >     
+                                     median(threshold_nointer))
+
+#...............................................................................
+ATE_linear_inter <-  mean(EY1_linear_inter)- mean(EY0_linear_inter)  
+ATE_logit_inter <- mean(EY1_logit_inter) - mean(EY0_logit_inter)  
+
+ATE_linear_nointer <- mean(EY1_linear_nointer) - mean(EY0_linear_nointer)  
+ATE_logit_nointer <- mean(EY1_logit_nointer) - mean(EY0_logit_nointer)  
+  
+ATT_linear_inter <- mean(EY1_linear_inter[A == 1]) - mean(EY0_linear_inter[A == 1])  
+ATT_logit_inter <- mean(EY1_logit_inter[A == 1]) - mean(EY0_logit_inter[A == 1])    
+
+ATT_linear_nointer <- mean(EY1_linear_nointer[A == 1]) - mean(EY0_linear_nointer[A == 1])  
+ATT_logit_nointer <- mean(EY1_logit_nointer[A == 1]) - mean(EY0_logit_nointer[A == 1])    
+
+RD_diff_logit_inter <- ATE_logit_inter-ATT_logit_inter
+RD_diff_logit_nointer <- ATE_logit_nointer-ATT_logit_nointer
+
+RD_diff_linear_inter <- ATE_linear_inter-ATT_linear_inter
+RD_diff_linear_nointer <- ATE_linear_nointer-ATT_linear_nointer
+
+#-------------------------------------------------------------------------------
+# Create the table based on the results 
+
+# Calculate bias for ATE and ATT
+res_nointer_full <- read_csv(here("output","res_nointer_full2025-02-15.csv"))
+res_inter_full <- read_csv(here("output","res_inter_full2025-02-15.csv"))
+res_final<- read_csv(here("output","results_final_2025-02-15.csv"))
+
+# Define the scenarios [Confirm with each model]
+scenario_table_nointer <- data.frame(
+  scenario = 1:12,
+  DGM = c("Linear", "Linear", "Logit", "Logit", 
+          "Linear", "Linear", "Logit", "Logit",
+          "Linear", "Logit","Linear", "Logit"),
+  True_ATE = 
+    c(ATE_linear_nointer, ATE_linear_nointer, ATE_logit_nointer, ATE_logit_nointer,
+      ATE_linear_nointer, ATE_linear_nointer, ATE_logit_nointer, ATE_logit_nointer,
+      ATE_linear_nointer, ATE_logit_nointer, ATE_linear_nointer, ATE_logit_nointer),
+  
+  True_ATT = 
+    c(ATT_linear_nointer, ATT_linear_nointer, ATT_logit_nointer, ATT_logit_nointer,
+      ATT_linear_nointer, ATT_linear_nointer, ATT_logit_nointer, ATT_logit_nointer,
+      ATT_linear_nointer, ATT_logit_nointer, ATT_linear_nointer, ATT_logit_nointer)
+)
+
+scenario_table_inter <- data.frame(
+  scenario = 1:12,
+  DGM = c("Linear", "Linear", "Logit", "Logit", 
+          "Linear", "Linear", "Logit", "Logit",
+          "Linear", "Logit","Linear", "Logit"),
+  True_ATE = c(ATE_linear_inter, ATE_linear_inter, ATE_logit_inter, ATE_logit_inter,
+               ATE_linear_inter, ATE_linear_inter, ATE_logit_inter, ATE_logit_inter,
+               ATE_linear_inter, ATE_logit_inter, ATE_linear_inter, ATE_logit_inter),
+  
+  True_ATT = c(ATT_linear_inter, ATT_linear_inter, ATT_logit_inter, ATT_logit_inter,
+               ATT_linear_inter, ATT_linear_inter, ATT_logit_inter, ATT_logit_inter,
+               ATT_linear_inter, ATT_logit_inter, ATT_linear_inter, ATT_logit_inter)
+)
+
+results_full_nointer <- scenario_table_nointer %>%
+  right_join(res_nointer_full, by = "scenario") 
+results_full_nointer$ATE_bias <- 
+  results_full_nointer$ATE_hat -results_full_nointer$True_ATE
+results_full_nointer$ATT_bias <- 
+  results_full_nointer$ATT_hat -results_full_nointer$True_ATT
+
+results_full_inter <- scenario_table_inter %>%
+  right_join(res_inter_full, by = "scenario") 
+results_full_inter$ATE_bias <- 
+  results_full_inter$ATE_hat -results_full_inter$True_ATE
+results_full_inter$ATT_bias <- 
+  results_full_inter$ATT_hat -results_full_inter$True_ATT
+
+results_full_nointer1 <- results_full_nointer %>% 
+  group_by(scenario,method) %>% 
+  summarize(ATE_rdbias = mean(ATE_bias),
+            ATT_rdbias = mean(ATT_bias))
+
+results_full_inter1 <- results_full_inter %>% 
+  group_by(scenario,method) %>% 
+  summarize(ATE_rdbias = mean(ATE_bias),
+            ATT_rdbias = mean(ATT_bias))
+
+results_full_nointer1 <- cbind(DGM_interaction = "No", results_full_nointer1)
+results_full_inter1 <- cbind(DGM_interaction = "Yes", results_full_inter1)
+final_table1 <- rbind(results_full_inter1,results_full_nointer1)
+results_final_withbias <- final_table1 %>%
+  right_join(res_final, by = c("scenario","DGM_interaction","method"))
+
+results_final_withbias <- results_final_withbias %>% 
+  select(scenario, DGM, DGM_interaction, AnalyticModel, InteractionInModel,
+         method, RD_diff, OR_diff, ATE_rdbias,ATT_rdbias,
+         ATE_rd, ATT_rd, ATE_or, ATT_or) 
+
+write_csv(results_final_withbias,
+          here("output","result_final_withbias.csv"))
+
+res_final<- read_csv(here("output","results_final_2025-02-15.csv"))
+
+
+
