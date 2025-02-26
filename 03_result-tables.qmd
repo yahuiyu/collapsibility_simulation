@@ -1,0 +1,393 @@
+---
+title: "Collapsibility simulation results"
+author: "Ya-Hui"
+format: html
+editor: visual
+---
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+pacman::p_load(
+  rio,
+  here,
+  skimr,
+  tidyverse,
+  lmtest,
+  sandwich,
+  broom,
+  parallel, 
+  SuperLearner,
+  tmle,
+  #ggpubr,
+  patchwork,
+  gt
+)
+
+thm <- theme_classic() +
+  theme(
+    legend.position = "top",
+    legend.background = element_rect(fill = "transparent", colour = NA),
+    legend.key = element_rect(fill = "transparent", colour = NA)
+  )
+theme_set(thm)
+
+res_final<- read_csv(here("output","result_final_withbias.csv"))
+```
+
+\(1\) DSM without interaction (Liner)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+res_wo_linear <- res_final %>%
+  filter(DGM == "Linear", DGM_interaction == "No") %>%
+  select (-scenario,-DGM,-DGM_interaction) %>%
+  rename(inter = InteractionInModel)
+
+res_wo_linear_linear <- res_wo_linear %>%
+  filter(AnalyticModel %in% c("Linear","linear" )) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_wo_linear_logit <- res_wo_linear %>%
+  filter(AnalyticModel == "Logit") %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_wo_linear_SL <- res_wo_linear %>%
+  filter(AnalyticModel %in% c("SL2","SL4")) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+
+table1.1 <- res_wo_linear_linear %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table1.2 <- res_wo_linear_logit %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table1.3 <- res_wo_linear_SL %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method)
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Function to add a section row
+table_with_section <- function(df, section_name) {
+  bind_rows(data.frame(method = section_name),df)
+}
+
+# Add section rows and stack tables
+stacked_data <- bind_rows(
+  table_with_section(table1.1, "Linear"),
+  table_with_section(table1.2, "Logit"),
+  table_with_section(table1.3, "SL")
+) %>% mutate(across(where(is.numeric), ~ round(., 4)))
+
+stacked_data <- stacked_data %>%
+  select(method,RD_diff_inter_No, RD_diff_inter_Yes, OR_diff_inter_No, OR_diff_inter_Yes,
+         ATE_biaspct_inter_No, ATE_biaspct_inter_Yes, 
+         ATT_biaspct_inter_No, ATT_biaspct_inter_Yes)
+
+# Create the gt table with section rows highlighted
+stacked_data %>%
+  gt() %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", size = "large"),
+      cell_fill(color = "#f0f0f0")
+    ),
+    locations = cells_body(
+      columns = method,
+      rows = method %in% c("Linear", "Logit", "SL")
+    )
+  ) %>%
+  fmt_missing(
+    columns = everything(),    
+    missing_text = ""          
+  ) %>%
+  cols_label(
+    method = "Analytic_model",
+  ) %>%
+  tab_header(
+    title = md("DSM without interaction (Liner)")
+  )
+```
+
+\(2\) DSM with interaction (Liner)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+res_w_linear <- res_final %>%
+  filter(DGM == "Linear", DGM_interaction == "Yes") %>%
+  select (-scenario,-DGM,-DGM_interaction) %>%
+  rename(inter = InteractionInModel)
+
+res_w_linear_linear <- res_w_linear %>%
+  filter(AnalyticModel %in% c("Linear","linear" )) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_w_linear_logit <- res_w_linear %>%
+  filter(AnalyticModel == "Logit") %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_w_linear_SL <- res_w_linear %>%
+  filter(AnalyticModel %in% c("SL2","SL4")) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+
+table2.1 <- res_w_linear_linear %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table2.2 <- res_w_linear_logit %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table2.3 <- res_w_linear_SL %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Function to add a section row
+table_with_section <- function(df, section_name) {
+  bind_rows(data.frame(method = section_name),df)
+}
+
+# Add section rows and stack tables
+stacked_data2 <- bind_rows(
+  table_with_section(table2.1, "Linear"),
+  table_with_section(table2.2, "Logit"),
+  table_with_section(table2.3, "SL")
+) %>% mutate(across(where(is.numeric), ~ round(., 4)))
+
+stacked_data2 <- stacked_data2 %>%
+  select(method,RD_diff_inter_No, RD_diff_inter_Yes, OR_diff_inter_No, OR_diff_inter_Yes,
+         ATE_biaspct_inter_No, ATE_biaspct_inter_Yes, 
+         ATT_biaspct_inter_No, ATT_biaspct_inter_Yes)
+
+# Create the gt table with section rows highlighted
+stacked_data2 %>%
+  gt() %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", size = "large"),
+      cell_fill(color = "#f0f0f0")
+    ),
+    locations = cells_body(
+      columns = method,
+      rows = method %in% c("Linear", "Logit", "SL")
+    )
+  ) %>%
+  fmt_missing(
+    columns = everything(),    
+    missing_text = ""          
+  ) %>%
+  cols_label(
+    method = "Analytic_model",
+  ) %>%
+  tab_header(
+    title = md("DSM with interaction (Liner)")
+  )
+```
+
+\(3\) DSM without interaction (Logit)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+res_wo_logit <- res_final %>%
+  filter(DGM == "Logit", DGM_interaction == "No") %>%
+  select (-scenario,-DGM,-DGM_interaction) %>%
+  rename(inter = InteractionInModel)
+
+res_wo_logit_linear <- res_wo_logit %>%
+  filter(AnalyticModel %in% c("Linear","linear" )) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_wo_logit_logit <- res_wo_logit %>%
+  filter(AnalyticModel == "Logit") %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_wo_logit_SL <- res_wo_logit %>%
+  filter(AnalyticModel %in% c("SL2","SL4")) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+
+table3.1 <- res_wo_logit_linear %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table3.2 <- res_wo_logit_logit %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table3.3 <- res_wo_logit_SL %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Function to add a section row
+table_with_section <- function(df, section_name) {
+  bind_rows(data.frame(method = section_name),df)
+}
+
+# Add section rows and stack tables
+stacked_data3 <- bind_rows(
+  table_with_section(table3.1, "Linear"),
+  table_with_section(table3.2, "Logit"),
+  table_with_section(table3.3, "SL")
+) %>% mutate(across(where(is.numeric), ~ round(., 4)))
+
+stacked_data3 <- stacked_data3 %>%
+  select(method,RD_diff_inter_No, RD_diff_inter_Yes, OR_diff_inter_No, OR_diff_inter_Yes,
+         ATE_biaspct_inter_No, ATE_biaspct_inter_Yes, 
+         ATT_biaspct_inter_No, ATT_biaspct_inter_Yes)
+
+# Create the gt table with section rows highlighted
+stacked_data3 %>%
+  gt() %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", size = "large"),
+      cell_fill(color = "#f0f0f0")
+    ),
+    locations = cells_body(
+      columns = method,
+      rows = method %in% c("Linear", "Logit", "SL")
+    )
+  ) %>%
+  fmt_missing(
+    columns = everything(),    
+    missing_text = ""          
+  ) %>%
+  cols_label(
+    method = "Analytic_model",
+  ) %>%
+  tab_header(
+    title = md("DSM without interaction (Logit)")
+  )
+```
+
+\(4\) DSM with interaction (Logit)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+res_w_logit <- res_final %>%
+  filter(DGM == "Logit", DGM_interaction == "Yes") %>%
+  select (-scenario,-DGM,-DGM_interaction) %>%
+  rename(inter = InteractionInModel)
+
+res_w_logit_linear <- res_w_logit %>%
+  filter(AnalyticModel %in% c("Linear","linear" )) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_w_logit_logit <- res_w_logit %>%
+  filter(AnalyticModel == "Logit") %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+res_w_logit_SL <- res_w_logit %>%
+  filter(AnalyticModel %in% c("SL2","SL4")) %>%
+  select (-AnalyticModel, -ATE_or,-ATE_rd,-ATT_or, -ATT_rd, -ATT_rdbias, -ATE_rdbias)
+
+table4.1 <- res_w_logit_linear %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table4.2 <- res_w_logit_logit %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method) 
+
+table4.3 <- res_w_logit_SL %>%
+  pivot_longer(cols = 3:6, names_to = "variable", values_to = "value") %>%
+  pivot_wider(
+    names_from = c(inter, variable),
+    values_from = value,
+    names_glue = "{variable}_inter_{inter}"
+  ) %>%
+  arrange(method)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Function to add a section row
+table_with_section <- function(df, section_name) {
+  bind_rows(data.frame(method = section_name),df)
+}
+
+# Add section rows and stack tables
+stacked_data4 <- bind_rows(
+  table_with_section(table4.1, "Linear"),
+  table_with_section(table4.2, "Logit"),
+  table_with_section(table4.3, "SL")
+) %>% mutate(across(where(is.numeric), ~ round(., 4)))
+
+stacked_data4 <- stacked_data4 %>%
+  select(method,RD_diff_inter_No, RD_diff_inter_Yes, OR_diff_inter_No, OR_diff_inter_Yes,
+         ATE_biaspct_inter_No, ATE_biaspct_inter_Yes, 
+         ATT_biaspct_inter_No, ATT_biaspct_inter_Yes)
+
+# Create the gt table with section rows highlighted
+stacked_data4 %>%
+  gt() %>%
+  tab_style(
+    style = list(
+      cell_text(weight = "bold", size = "large"),
+      cell_fill(color = "#f0f0f0")
+    ),
+    locations = cells_body(
+      columns = method,
+      rows = method %in% c("Linear", "Logit", "SL")
+    )
+  ) %>%
+  fmt_missing(
+    columns = everything(),    
+    missing_text = ""          
+  ) %>%
+  cols_label(
+    method = "Analytic_model",
+  ) %>%
+  tab_header(
+    title = md("DSM with interaction (Logit)")
+  )
+```
